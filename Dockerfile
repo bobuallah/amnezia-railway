@@ -1,14 +1,21 @@
-FROM lscr.io/linuxserver/wireguard:latest
+FROM ubuntu:24.04
 
-# Install AmneziaWG tools (obfuscated WireGuard)
-RUN apk add --no-cache curl bash && \
-    curl -L https://github.com/amnezia-vpn/amneziawg-tools/releases/latest/download/amneziawg-server-linux-x64 -o /usr/bin/awg && \
-    chmod +x /usr/bin/awg
+# Install dependencies (Debian apt)
+RUN apt-get update && apt-get install -y \
+    curl wget unzip iptables iproute2 wireguard-tools nginx \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install Amnezia server (official GitHub script)
+RUN curl -fsSL https://raw.githubusercontent.com/amnezia-vpn/amnezia-server/main/install.sh | bash
+
+# Nginx for Railway health check (dummy OK on port 80)
+COPY nginx.conf /etc/nginx/sites-available/default
+RUN ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default && \
+    rm /etc/nginx/sites-enabled/default.bak
+
+# Expose VPN port
 EXPOSE 51820/udp
+EXPOSE 80/tcp
 
-CMD ["awg", "--server"]
-# Dummy HTTP server for Railway health check
-RUN apk add --no-cache nginx
-COPY nginx.conf /etc/nginx/nginx.conf
-CMD ["sh", "-c", "nginx & awg --server"]
+# Start nginx + Amnezia server
+CMD nginx && /usr/local/bin/amnezia-server start
